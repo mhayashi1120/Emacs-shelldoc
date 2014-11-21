@@ -50,6 +50,9 @@
   :group 'applications
   :prefix "shelldoc-")
 
+(put 'shelldoc-quit 'error-conditions '(shelldoc-quit error))
+(put 'shelldoc-quit 'error-message "shelldoc error")
+
 ;;;
 ;;; Process
 ;;;
@@ -280,7 +283,11 @@ See the `shelldoc--git-commands-filter' as sample."
     (or (get-buffer-window buf)
         (let* ((wins (shelldoc--windows-bigger-order))
                (win (car wins))
-               (newwin (split-window win)))
+               (newwin
+                (condition-case nil
+                    (split-window win)
+                  (error
+                   (signal 'shelldoc-quit nil)))))
           (set-window-buffer newwin buf)
           (select-window (minibuffer-window) t)
           newwin))))
@@ -348,11 +355,7 @@ See the `shelldoc--git-commands-filter' as sample."
   (setq shelldoc--current-man-name nil)
   (setq shelldoc--current-commands nil))
 
-(defun shelldoc-print-info ()
-  (when (minibufferp)
-    (shelldoc-print-command-info)))
-
-(defun shelldoc-print-command-info ()
+(defun shelldoc--print-command-info ()
   (cl-destructuring-bind (cmd-before cmd-after)
       (shelldoc--parse-current-command-line)
     (let ((cmd (shelldoc--guess-manpage-name cmd-before)))
@@ -411,13 +414,13 @@ See the `shelldoc--git-commands-filter' as sample."
 
 ;;TODO
 (defun shelldoc-isearch-forward-document ()
-  "Testing: Search text in document buffer."
+  "testing: Search text in document buffer."
   (interactive)
   (shelldoc--invoke-function 'isearch-forward))
 
 ;;TODO
 (defun shelldoc-isearch-backward-document ()
-  "Testing: Search text in document buffer."
+  "testing: Search text in document buffer."
   (interactive)
   (shelldoc--invoke-function 'isearch-backward))
 
@@ -494,6 +497,16 @@ See the `shelldoc--git-commands-filter' as sample."
 ;;  remove-hook -> shelldoc--cleanup
 
 (defvar shelldoc--minibuffer-depth nil)
+
+(defun shelldoc-print-info ()
+  (condition-case nil
+      (cond
+       ((minibufferp)
+        (shelldoc--print-command-info)))
+    (shelldoc-quit
+     ;; terminate shelldoc
+     ;; (e.g. too small window to split window)
+     (shelldoc--cleanup))))
 
 (defun shelldoc--initialize ()
   (when (= (minibuffer-depth) shelldoc--minibuffer-depth)
