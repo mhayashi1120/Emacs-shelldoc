@@ -1,4 +1,4 @@
-;;; shelldoc.el --- Show shell command man.
+;;; shelldoc.el --- shell command editing support with man page.
 
 ;; Author: Masahiro Hayashi <mhayashi1120@gmail.com>
 ;; Keywords: applications
@@ -28,11 +28,16 @@
 ;;
 ;; Otherwise put this file into load-path'ed directory.
 ;; And put the following expression into your ~/.emacs.
+;; You may need some extra packages.
 ;;
 ;;     (require 'shelldoc)
 
 ;; Now you can see man page when `read-shell-command' is invoked.
 ;; C-v/M-v to scroll the man page window.
+;; C-c C-s / C-c C-r to search the page.
+
+;; * You can complete `-' (hyphen) option at point.
+;;   Try to type C-i after insert `-' when showing shelldoc window.
 
 ;; * You may install new man page after shelldoc:
 ;;
@@ -44,9 +49,10 @@
 (require 'man)
 (require 's)
 (require 'advice)
+(require 'shell)
 
 (defgroup shelldoc ()
-  "Show man document when read shell command."
+  "shell command editing support with man page."
   :group 'applications
   :prefix "shelldoc-")
 
@@ -218,6 +224,51 @@ See the `shelldoc--git-commands-filter' as sample."
      (car last))))
 
 ;;;
+;;; Completion
+;;;
+
+;;TODO improve regexp
+;; OK: -a, --all
+;; NG: --all, -a
+(defconst shelldoc--man-option-re
+  (eval-when-compile
+    (concat
+     ;; general option segment start
+     "^\\(?:[\s\t]*\\(-[^\s\t\n,]+\\)\\)"
+     "\\|"
+     ;; long option
+     "\\(--[-_a-zA-Z0-9]+\\)"
+     )))
+
+;; gather text by REGEXP first subexp of matched
+(defun shelldoc--gather-regexp (regexp)
+  (let ((buf (shelldoc--popup-buffer))
+        (res '())
+        (depth (regexp-opt-depth regexp)))
+    (with-current-buffer buf
+      (goto-char (point-min))
+      (while (re-search-forward regexp nil t)
+        (let ((text (cl-loop for i from 1 to depth
+                             if (match-string-no-properties i)
+                             return (match-string-no-properties i))))
+          (unless (member text res)
+            (setq res (cons text res)))))
+      (nreverse res))))
+
+;; Adopted `completion-at-point'
+(defun shelldoc-option-completion ()
+  (save-excursion
+    (let ((end (point)))
+      (skip-chars-backward "^\s\t\n")
+      (when (looking-at "[\"']?\\(-\\)")
+        (let ((start (match-beginning 1))
+              (collection (shelldoc--gather-regexp
+                           shelldoc--man-option-re)))
+          (if collection
+              (list start end collection nil)
+            nil))))))
+
+;;;
 ;;; UI
 ;;;
 
@@ -279,10 +330,20 @@ See the `shelldoc--git-commands-filter' as sample."
       (delete-window win))))
 
 (defun shelldoc--prepare-window ()
-  (let ((buf (shelldoc--popup-buffer)))
-    (or (get-buffer-window buf)
-        (let* ((wins (shelldoc--windows-bigger-order))
-               (win (car wins))
+  (let* ((buf (shelldoc--popup-buffer))
+         (all-wins (shelldoc--windows-bigger-order))
+         (winlist (cl-remove-if-not
+                   (lambda (w)
+                     (eq (window-buffer w) buf)) all-wins)))
+    ;; delete if multiple window is shown.
+    ;; probablly no error but ignore error just in case.
+    (ignore-errors
+      (when (> (length winlist) 1)
+        (dolist (w (cdr winlist))
+          (delete-window w))))
+    (or (car winlist)
+        ;; split the biggest window
+        (let* ((win (car all-wins))
                (newwin
                 (condition-case nil
                     (split-window win)
@@ -375,19 +436,20 @@ See the `shelldoc--git-commands-filter' as sample."
                 (shelldoc--prepare-man-page page)
                 (setq shelldoc--current-man-name name)))
 
-            (unless (equal shelldoc--current-commands cmd-before)
-              (shelldoc--prepare-buffer cmd-before)
+            (let ((not-changed (equal shelldoc--current-commands cmd-before)))
+              (unless not-changed
+                (shelldoc--prepare-buffer cmd-before))
+              ;; arrange window visibility.
+              ;; delete multiple buffer window when always timer run.
               (let ((win (shelldoc--prepare-window)))
-                (shelldoc--set-window-cursor win cmd-before))
+                ;; set `window-start' when change command line virtually
+                (unless not-changed
+                  (shelldoc--set-window-cursor win cmd-before)))
               (setq shelldoc--current-commands cmd-before))))))))))
 
 ;;
 ;; Command
 ;;
-
-(defun shelldoc-scroll-doc-window-down (&optional arg)
-  (interactive "p")
-  (shelldoc-scroll-doc-window-up (- arg)))
 
 (defun shelldoc-scroll-doc-window-up (&optional arg)
   (interactive "p")
@@ -399,12 +461,15 @@ See the `shelldoc--git-commands-filter' as sample."
     ;; ARG is lines of text
     (scroll-other-window scroll-lines)))
 
+(defun shelldoc-scroll-doc-window-down (&optional arg)
+  (interactive "p")
+  (shelldoc-scroll-doc-window-up (- arg)))
+
 ;;TODO
 (defun shelldoc-switch-popup-window ()
   "Not yet implemented"
   (interactive)
   (error "Not yet implemented"))
-
 
 ;;TODO
 (defun shelldoc-switch-language ()
@@ -458,6 +523,10 @@ See the `shelldoc--git-commands-filter' as sample."
     ;; restore old map
     (setq minibuffer-local-shell-command-map
           shelldoc--original-minibuffer-map)
+    ;; remove completion
+    (setq shell-dynamic-complete-functions
+          (remq 'shelldoc-option-completion
+                shell-dynamic-complete-functions))
     (setq shelldoc:on nil))
    (t
     (ad-enable-advice
@@ -470,6 +539,9 @@ See the `shelldoc--git-commands-filter' as sample."
     ;; set new map
     (setq minibuffer-local-shell-command-map
           shelldoc-minibuffer-map)
+    ;; for completion
+    (add-to-list 'shell-dynamic-complete-functions
+                 'shelldoc-option-completion)
     (shelldoc-clear-cache t)
     (setq shelldoc:on t)))
   (message "Now `shelldoc' is %s."
