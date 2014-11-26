@@ -128,7 +128,8 @@
            (when (shelldoc--maybe-command-name-p c)
              (let ((name (shelldoc--convert-man-name c)))
                (cond
-                ((not (memq (gethash name shelldoc--man-cache) '(nil unavailable)))
+                ((not (memq (gethash name shelldoc--man-cache)
+                            '(nil unavailable)))
                  c)
                 ((not (shelldoc--manpage-exists-p name))
                  (puthash name 'unavailable shelldoc--man-cache)
@@ -193,7 +194,7 @@
          ;; do not use "\\b" sequence
          ;; keyword may be "--option" like string which start with
          ;; non word (FIXME: otherwise define new syntax?)
-         (non-word "[][\s\t\n:,=]")
+         (non-word "[][\s\t\n:,=|]")
          (regexp (concat non-word base-re non-word)))
     regexp))
 
@@ -232,15 +233,17 @@ See the `shelldoc--git-commands-filter' as sample."
 ;; NG: --all, -a
 (defconst shelldoc--man-option-re
   (eval-when-compile
-    (concat
-     ;; general option segment start
-     "^\\(?:[\s\t]*\\(-[^\s\t\n,]+\\)\\)"
-     "\\|"
-     ;; long option
-     "\\(--[-_a-zA-Z0-9]+\\)"
-     )))
+    (mapconcat
+     'identity
+     '(
+       ;; general option segment start
+       "^\\(?:[\s\t]*\\(-[^\s\t\n,]+\\)\\)"
+       ;; long option
+       "\\(--[-_a-zA-Z0-9]+\\)"
+       )
+     "\\|")))
 
-;; gather text by REGEXP first subexp of matched
+;; gather text by REGEXP first subexp of captured
 (defun shelldoc--gather-regexp (regexp)
   (let ((buf (shelldoc--popup-buffer))
         (res '())
@@ -261,6 +264,8 @@ See the `shelldoc--git-commands-filter' as sample."
     (let ((end (point)))
       (skip-chars-backward "^\s\t\n")
       (when (looking-at "[\"']?\\(-\\)")
+        ;;TODO show window
+        ;; (shelldoc-print-info)
         (let ((start (match-beginning 1))
               (collection (shelldoc--gather-regexp
                            shelldoc--man-option-re)))
@@ -278,7 +283,7 @@ See the `shelldoc--git-commands-filter' as sample."
   :group 'shelldoc)
 
 (defface shelldoc-short-help-emphasis-face
-  '((t :inherit match :bold t :foreground "blue"))
+  '((t :inherit match :bold t :underline t))
   "Face to highlight word in shelldoc."
   :group 'shelldoc)
 
@@ -355,7 +360,13 @@ See the `shelldoc--git-commands-filter' as sample."
 
 (defun shelldoc--set-window-cursor (win words)
   (let* ((last (car (last words)))
-         (regexp (shelldoc--create-wordify-regexp last)))
+         (regexp
+          (cond
+           ((string-match "\\`-" last)
+            ;; general man page option start with spaces and hiphen
+            (format "^[\s\t]+%s\\_>" (regexp-quote last)))
+           (t
+            (shelldoc--create-wordify-regexp last)))))
     (when last
       (with-current-buffer (shelldoc--popup-buffer)
         (goto-char (point-min))
@@ -419,31 +430,33 @@ See the `shelldoc--git-commands-filter' as sample."
 (defun shelldoc--print-command-info ()
   (cl-destructuring-bind (cmd-before cmd-after)
       (shelldoc--parse-current-command-line)
-    (let ((cmd (shelldoc--guess-manpage-name cmd-before)))
+    (let ((cmd (shelldoc--guess-manpage-name cmd-before))
+          (clear (lambda ()
+                   (shelldoc--delete-window)
+                   (shelldoc--clear-showing))))
       (cond
        ((null cmd)
-        (shelldoc--delete-window)
-        (shelldoc--clear-showing))
+        (funcall clear))
        (t
         (let ((man (shelldoc--get-manpage cmd)))
           (cond
            ((or (null man) (eq 'unavailable man))
-            (shelldoc--delete-window)
-            (shelldoc--clear-showing))
+            (funcall clear))
            (t
             (cl-destructuring-bind (name page) man
               (unless (equal name shelldoc--current-man-name)
                 (shelldoc--prepare-man-page page)
                 (setq shelldoc--current-man-name name)))
 
-            (let ((not-changed (equal shelldoc--current-commands cmd-before)))
-              (unless not-changed
+            (let ((changed (not (equal shelldoc--current-commands
+                                       cmd-before))))
+              (when changed
                 (shelldoc--prepare-buffer cmd-before))
               ;; arrange window visibility.
-              ;; delete multiple buffer window when always timer run.
+              ;; may be deleted multiple buffer window.
               (let ((win (shelldoc--prepare-window)))
                 ;; set `window-start' when change command line virtually
-                (unless not-changed
+                (when changed
                   (shelldoc--set-window-cursor win cmd-before)))
               (setq shelldoc--current-commands cmd-before))))))))))
 
@@ -561,12 +574,15 @@ See the `shelldoc--git-commands-filter' as sample."
 ;;;
 
 ;; shelldoc--setup:
-;;  minibuffer-setup-hook <- add-hook <- shelldoc--initialize
+;;  minibuffer-setup-hook <- shelldoc--initialize
 ;; shelldoc--initialize:
-;;  remove-hook -> shelldoc--initialize
-;;  minibuffer-exit-hook <- add-hook <- shelldoc--cleanup
+;;  minibuffer-setup-hook -> -> shelldoc--initialize
+;;  minibuffer-exit-hook <- shelldoc--cleanup
+;;
+;; ***** shelldoc is working *****
+;;
 ;; shelldoc--cleanup:
-;;  remove-hook -> shelldoc--cleanup
+;;  minibuffer-exit-hook -> shelldoc--cleanup
 
 (defvar shelldoc--minibuffer-depth nil)
 
@@ -588,7 +604,8 @@ See the `shelldoc--git-commands-filter' as sample."
     (add-hook 'minibuffer-exit-hook 'shelldoc--cleanup)
     ;; initialize internal vars
     (shelldoc--clear-showing)
-    (setq shelldoc--saved-window-configuration (current-window-configuration))
+    (setq shelldoc--saved-window-configuration
+          (current-window-configuration))
     (run-with-idle-timer 0.5 t 'shelldoc-print-info)))
 
 (defun shelldoc--cleanup ()
