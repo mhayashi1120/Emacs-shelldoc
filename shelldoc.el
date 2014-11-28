@@ -4,7 +4,7 @@
 ;; Keywords: applications
 ;; URL: http://github.com/mhayashi1120/Emacs-shelldoc/raw/master/shelldoc.el
 ;; Version: 0.0.1
-;; Package-Requires: ((cl-lib "0.5") (s "1.9.0"))
+;; Package-Requires: ((cl-lib "0.3") (s "1.9.0"))
 
 ;; This program is free software; you can redistribute it and/or
 ;; modify it under the terms of the GNU General Public License as
@@ -166,7 +166,7 @@
          (text (format "%s" exp)))
     (cond
      ;; general (e.g. --prefix=/usr/local)
-     ((string-match "\\`\\(-.+?\\)=\\(.*\\)" text)
+     ((string-match "\\`\\(-.+?\\)=\\(.+\\)" text)
       (list (match-string 1 text) (match-string 2 text)))
      (t
       (list text)))))
@@ -277,6 +277,11 @@ See the `shelldoc--git-commands-filter' as sample."
 ;;; UI
 ;;;
 
+(defcustom shelldoc-idle-delay 0.3
+  "Seconds to delay until popup man page."
+  :group 'shelldoc
+  :type 'number)
+
 (defface shelldoc-short-help-face
   '((t :inherit match))
   "Face to highlight word in shelldoc."
@@ -360,22 +365,37 @@ See the `shelldoc--git-commands-filter' as sample."
 
 (defun shelldoc--set-window-cursor (win words)
   (let* ((last (car (last words)))
-         (regexp
-          (cond
-           ((string-match "\\`-" last)
-            ;; general man page option start with spaces and hiphen
-            (format "^[\s\t]+%s\\_>" (regexp-quote last)))
-           (t
-            (shelldoc--create-wordify-regexp last)))))
+         (regexps '()))
     (when last
+      (when (string-match "\\`-" last)
+        ;; general man page option start with spaces and hiphen
+        (push (format "^[\s\t]+%s\\_>" (regexp-quote last)) regexps))
+      (when (string-match "\\`--" last)
+        ;; e.g. git add --force
+        (push (format "^[\s\t]+-[^-][\s\t]*,[\s\t]*%s" (regexp-quote last))
+              regexps))
+      (when (string-match "\\`\\(-[^=]+\\)=" last)
+        ;; e.g. print --action=
+        (let ((last-arg (match-string 1 last)))
+          (push (format "^[\s\t]+%s=" (regexp-quote last-arg)) regexps)))
+      ;; default regexp if not matched to above
+      (push (shelldoc--create-wordify-regexp last) regexps)
+      (setq regexps (nreverse regexps))
       (with-current-buffer (shelldoc--popup-buffer)
         (goto-char (point-min))
         ;; goto first found (match strictly)
-        (and (let ((case-fold-search nil))
-               (re-search-forward regexp nil t))
-             ;; 5% margin
-             (let ((margin (truncate (* (window-height win) 0.05))))
-               (set-window-start win (point-at-bol (- margin)))))))))
+        (catch 'done
+          (while regexps
+            (when (let ((case-fold-search nil))
+                    (re-search-forward (car regexps) nil t))
+              ;; 5% margin
+              (let ((margin (truncate (* (window-height win) 0.05))))
+                (set-window-start win (point-at-bol (- margin)))
+                nil)
+              (throw 'done t))
+            (setq regexps (cdr regexps)))
+          ;; set start
+          (set-window-start win (point-min)))))))
 
 ;; FUNC must not change selected-window
 (defun shelldoc--invoke-function (func)
@@ -606,7 +626,7 @@ See the `shelldoc--git-commands-filter' as sample."
     (shelldoc--clear-showing)
     (setq shelldoc--saved-window-configuration
           (current-window-configuration))
-    (run-with-idle-timer 0.5 t 'shelldoc-print-info)))
+    (run-with-idle-timer shelldoc-idle-delay t 'shelldoc-print-info)))
 
 (defun shelldoc--cleanup ()
   ;; checking minibuffer-depth (e.g. helm conflict this)
@@ -627,10 +647,11 @@ See the `shelldoc--git-commands-filter' as sample."
 ;; FIXME: switch to nadvice
 ;;;###autoload
 (defadvice read-shell-command
+    ;; default is `activate'
     (before shelldoc-initialize-read-shell-command () activate)
   (shelldoc--setup))
 
-;; activate
+;; activate (after autoload / manually load)
 (shelldoc 1)
 
 ;;;
