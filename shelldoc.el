@@ -1,4 +1,4 @@
-;;; shelldoc.el --- shell command editing support with man page.
+;;; shelldoc.el --- Shell command editing support with man page.
 
 ;; Author: Masahiro Hayashi <mhayashi1120@gmail.com>
 ;; Keywords: applications
@@ -36,10 +36,10 @@
 ;; C-v/M-v to scroll the man page window.
 ;; C-c C-s / C-c C-r to search the page.
 
-;; * You can complete `-' (hyphen) option at point.
-;;   Try to type C-i after insert `-' when showing shelldoc window.
+;; * You can complete `-` (hyphen) option at point.
+;;   Try to type C-i after insert `-` when showing shelldoc window.
 
-;; * You may install new man page after shelldoc:
+;; * You may install new man page after use shelldoc:
 ;;
 ;;     M-x shelldoc-clear-cache
 
