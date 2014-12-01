@@ -394,8 +394,8 @@ See the `shelldoc--git-commands-filter' as sample."
                 nil)
               (throw 'done t))
             (setq regexps (cdr regexps)))
-          ;; set start
-          (set-window-start win (point-min)))))))
+          ;; Keep window start
+          )))))
 
 ;; FUNC must not change selected-window
 (defun shelldoc--invoke-function (func)
@@ -412,6 +412,11 @@ See the `shelldoc--git-commands-filter' as sample."
 ;; drawing
 ;;
 
+(defcustom shelldoc-fuzzy-match-requires 2
+  "Number of character to highlight with fuzzy search."
+  :group 'shelldoc
+  :type 'integer)
+
 (defun shelldoc--prepare-man-page (page)
   (with-current-buffer (shelldoc--popup-buffer)
     (let ((inhibit-read-only t))
@@ -423,7 +428,7 @@ See the `shelldoc--git-commands-filter' as sample."
     (remove-overlays)
 
     (dolist (word words)
-      (unless (string= word "")
+      (when (>= (length word) shelldoc-fuzzy-match-requires)
         (let ((regexp (concat "\\(" (regexp-quote word) "\\)")))
           ;; fuzzy search
           (shelldoc--mark-regexp regexp 'shelldoc-short-help-face t))))
