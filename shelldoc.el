@@ -1,9 +1,9 @@
-;;; shelldoc.el --- Shell command editing support with man page.
+;;; shelldoc.el --- shell command editing support with man page.
 
 ;; Author: Masahiro Hayashi <mhayashi1120@gmail.com>
 ;; Keywords: applications
 ;; URL: http://github.com/mhayashi1120/Emacs-shelldoc/raw/master/shelldoc.el
-;; Version: 0.0.1
+;; Version: 0.0.2
 ;; Package-Requires: ((cl-lib "0.3") (s "1.9.0"))
 
 ;; This program is free software; you can redistribute it and/or
@@ -36,12 +36,20 @@
 ;; C-v/M-v to scroll the man page window.
 ;; C-c C-s / C-c C-r to search the page.
 
-;; * You can complete `-` (hyphen) option at point.
-;;   Try to type C-i after insert `-` when showing shelldoc window.
+;; * You can complete `-' (hyphen) option at point.
+;;   Try to type C-i after insert `-' when showing shelldoc window.
 
-;; * You may install new man page after use shelldoc:
+;; * You may install new man page after shelldoc:
 ;;
 ;;     M-x shelldoc-clear-cache
+
+;; * To toggle shelldoc popup:
+;;
+;;     M-x shelldoc
+
+;;; TODO:
+;; * multilingual man page
+;; * support tramp (`call-process' -> `process-file' consider cache key)
 
 ;;; Code:
 
@@ -63,6 +71,8 @@
 ;;; Process
 ;;;
 
+(defvar shelldoc--man-locale nil)
+
 (defmacro shelldoc--man-environ (&rest form)
   `(with-temp-buffer
      (let ((process-environment (copy-sequence process-environment)))
@@ -74,6 +84,8 @@
        (setenv "LC_MESSAGES")
        (progn ,@form))))
 
+(defvar shelldoc--man-section nil)
+
 (defun shelldoc--call-man-to-string (args)
   (shelldoc--man-environ
    (when (= (apply
@@ -83,24 +95,27 @@
              args) 0)
      (buffer-string))))
 
-(defun shelldoc--read-manpage (name &optional section lang)
+(defun shelldoc--read-manpage (name)
   (let ((args '()))
-    (when lang
-      (setq args (append args (list "-L" lang))))
+    (when shelldoc--man-locale
+      (setq args
+            (append args
+                    (list "--locale" shelldoc--man-locale))))
     ;; restrict only two section
     ;; 1. Executable programs or shell commands
     ;; 8. System administration commands (usually only for root)
     (setq args (append
                 (list (format "--sections=%s"
-                              (or section "1,8")))
+                              (or shelldoc--man-section
+                                  "1,8")))
                 args))
     (setq args (append args (list name)))
     (shelldoc--call-man-to-string args)))
 
-(defun shelldoc--manpage-exists-p (name &optional section)
+(defun shelldoc--manpage-exists-p (name)
   (let* ((args (list
                 (format "--sections=%s"
-                        (or section "1,8"))
+                        (or shelldoc--man-section "1,8"))
                 "--where" name))
          (out (shelldoc--call-man-to-string args)))
     (and out (s-trim out))))
@@ -109,7 +124,7 @@
 ;;; Cache (process result)
 ;;;
 
-;;TODO name/section/lang
+;;TODO name/section/lang and tramp
 (defvar shelldoc--man-cache
   (make-hash-table :test 'equal))
 
@@ -230,7 +245,7 @@ See the `shelldoc--git-commands-filter' as sample."
 
 ;;TODO improve regexp
 ;; OK: -a, --all
-;; NG: --all, -a
+;; NG: --all, -a (however no example..)
 (defconst shelldoc--man-option-re
   (eval-when-compile
     (mapconcat
@@ -413,7 +428,7 @@ See the `shelldoc--git-commands-filter' as sample."
 ;;
 
 (defcustom shelldoc-fuzzy-match-requires 2
-  "Number of character to highlight with fuzzy search."
+  "Number of characters to highlight with fuzzy search."
   :group 'shelldoc
   :type 'integer)
 
@@ -510,10 +525,14 @@ See the `shelldoc--git-commands-filter' as sample."
   (error "Not yet implemented"))
 
 ;;TODO
-(defun shelldoc-switch-language ()
-  "Not yet implemented"
+(defun shelldoc-toggle-locale ()
+  "Not yet implemented
+Toggle between default locale and todo"
   (interactive)
-  (error "Not yet implemented"))
+  (error "Not yet implemented")
+  (setq shelldoc--man-locale
+        (unless shelldoc--man-locale
+          (getenv "LANG"))))
 
 ;;TODO
 (defun shelldoc-isearch-forward-document ()
@@ -535,7 +554,7 @@ See the `shelldoc--git-commands-filter' as sample."
     (define-key map  "\C-v" 'shelldoc-scroll-doc-window-up)
     (define-key map  "\ev" 'shelldoc-scroll-doc-window-down)
     ;; (define-key map "\ec" 'shelldoc-switch-popup-window)
-    ;; (define-key map "\ec" 'shelldoc-switch-language)
+    ;; (define-key map "\ec" 'shelldoc-toggle-locale)
     (define-key map "\C-c\C-s" 'shelldoc-isearch-forward-document)
     (define-key map "\C-c\C-r" 'shelldoc-isearch-backward-document)
 
@@ -601,10 +620,10 @@ See the `shelldoc--git-commands-filter' as sample."
 ;; shelldoc--setup:
 ;;  minibuffer-setup-hook <- shelldoc--initialize
 ;; shelldoc--initialize:
-;;  minibuffer-setup-hook -> -> shelldoc--initialize
+;;  minibuffer-setup-hook -> shelldoc--initialize
 ;;  minibuffer-exit-hook <- shelldoc--cleanup
 ;;
-;; ***** shelldoc is working *****
+;; Now shelldoc is working on timer:
 ;;
 ;; shelldoc--cleanup:
 ;;  minibuffer-exit-hook -> shelldoc--cleanup
@@ -665,7 +684,8 @@ See the `shelldoc--git-commands-filter' as sample."
 
 (defun shelldoc-unload-function ()
   (shelldoc -1)
-  t)
+  ;; explicitly return nil to continue `unload-feature'
+  nil)
 
 (provide 'shelldoc)
 
