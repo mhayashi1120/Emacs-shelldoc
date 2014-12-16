@@ -23,7 +23,7 @@
 
 ;;; Commentary:
 
-;; * Install
+;; # Install
 ;; Please install this package from MELPA. (http://melpa.milkbox.net/)
 ;;
 ;; Otherwise put this file into load-path'ed directory.
@@ -33,24 +33,44 @@
 ;;     (require 'shelldoc)
 
 ;; Now you can see man page when `read-shell-command' is invoked.
+;; e.g. M-x shell-command
 ;; C-v/M-v to scroll the man page window.
 ;; C-c C-s / C-c C-r to search the page.
 
-;; * You can complete `-' (hyphen) option at point.
-;;   Try to type C-i after insert `-' when showing shelldoc window.
+;; You can complete `-' (hyphen) option at point.
+;; Try to type C-i after insert `-' when showing shelldoc window.
 
-;; * You may install new man page after shelldoc:
+;; # Configuration
+
+;; ## To show original man page initially. (probably english)
+;; 
+;;    (setq shelldoc-keep-man-locale nil)
+
+;; ## You may install new man page after shelldoc:
 ;;
 ;;     M-x shelldoc-clear-cache
 
-;; * To toggle shelldoc popup:
+;; ## shelldoc is working as a minor mode if you desire.
+
+;; ### eshell
+;;
+;;    (add-hook 'eshell-mode-hook 'shelldoc-minor-mode-on)
+
+;; ### sh-mode (editing shell script)
+;;
+;;    (add-hook 'sh-mode-hook 'shelldoc-minor-mode-on)
+
+;; ### M-x shell
+;;
+;;    (add-hook 'shell-mode-hook 'shelldoc-minor-mode-on)
+
+;; ## To toggle shelldoc feature.
 ;;
 ;;     M-x shelldoc
 
 ;;; TODO:
 ;; * multilingual man page
 ;; * support tramp (`call-process' -> `process-file' consider cache key)
-;; * describe how to disalbe shelldoc-minor-mode-map each binding
 
 ;;; Code:
 
@@ -80,12 +100,17 @@ If you need to read default, set to nil."
   :group 'shelldoc
   :type 'boolean)
 
+(defun shelldoc--man-LANG ()
+  (cond
+   (shelldoc-keep-man-locale
+    (getenv "LANG"))
+   (t
+    "C")))
+
 (defmacro shelldoc--man-environ (&rest form)
   `(with-temp-buffer
      (let ((process-environment (copy-sequence process-environment)))
-       (setenv "LANG" (if shelldoc-keep-man-locale
-                          (getenv "LANG")
-                        "C"))
+       (setenv "LANG" (shelldoc--man-LANG))
        ;; unset unnecessary env variables
        (setenv "MANROFFSEQ")
        (setenv "MANSECT")
@@ -129,20 +154,31 @@ If you need to read default, set to nil."
          (out (shelldoc--call-man-to-string args)))
     (and out (s-trim out))))
 
+(defun shelldoc--convert-man-name (command)
+  (let ((nondir (file-name-nondirectory command))
+        (re (concat "\\(.+?\\)" (regexp-opt exec-suffixes) "\\'")))
+    (if (string-match re nondir)
+        (match-string 1 nondir)
+      nondir)))
+
 ;;;
 ;;; Cache (process result)
 ;;;
 
-;;TODO name/section/lang and tramp
+;;TODO key: lang/name and tramp
 (defvar shelldoc--man-cache
   (make-hash-table :test 'equal))
 
+(defun shelldoc--get-cache-keyname (man-name)
+  (format "%s/%s" (shelldoc--man-LANG) man-name))
+
 (defun shelldoc--get-manpage (cmd)
-  (let ((name (shelldoc--convert-man-name cmd)))
-    (or (gethash name shelldoc--man-cache)
+  (let* ((name (shelldoc--convert-man-name cmd))
+         (key (shelldoc--get-cache-keyname name)))
+    (or (gethash key shelldoc--man-cache)
         (let* ((page (shelldoc--read-manpage name))
                (man (if page (list name page) 'unavailable)))
-          (puthash name man shelldoc--man-cache)
+          (puthash key man shelldoc--man-cache)
           man))))
 
 (defun shelldoc--filter-manpage-args (args)
@@ -176,8 +212,9 @@ If you need to read default, set to nil."
          (get-buffer-process (current-buffer)))
     ;; guessed as prompt
     (let ((proc (get-buffer-process (current-buffer))))
-      ;;TODO when nil
       (process-mark proc)))
+   ((derived-mode-p 'sh-mode)
+    (point-at-bol))
    (t
     (signal 'shelldoc-quit (list "Not supported")))))
 
@@ -217,13 +254,6 @@ If you need to read default, set to nil."
    (not (string-match "=" text))
    ;; Detect general optional arg
    (not (string-match "\\`-" text))))
-
-(defun shelldoc--convert-man-name (command)
-  (let ((nondir (file-name-nondirectory command))
-        (re (concat "\\(.+?\\)" (regexp-opt exec-suffixes) "\\'")))
-    (if (string-match re nondir)
-        (match-string 1 nondir)
-      nondir)))
 
 ;;;
 ;;; Text manipulation
@@ -304,7 +334,7 @@ See the `shelldoc--git-commands-filter' as sample."
     (let ((end (point)))
       (skip-chars-backward "^\s\t\n")
       (when (looking-at "[\"']?\\(-\\)")
-        ;;TODO show window
+        ;;TODO show window forcibly
         ;; (shelldoc-print-info)
         (let ((start (match-beginning 1))
               (collection (shelldoc--gather-regexp
@@ -313,9 +343,6 @@ See the `shelldoc--git-commands-filter' as sample."
               (list start end collection nil)
             nil))))))
 
-;;TODO
-;; (add-hook 'pcomplete-try-first-hook
-;;           'shelldoc-option-pcomplete nil t)
 ;; Adopted `pcomplete'
 (defun shelldoc-option-pcomplete ()
   (let ((arg (pcomplete-actual-arg)))
@@ -560,7 +587,7 @@ See the `shelldoc--git-commands-filter' as sample."
   (interactive "p")
   (shelldoc-scroll-doc-window-up (- arg)))
 
-;;TODO
+;;TODO switch popup window position
 (defun shelldoc-switch-popup-window ()
   "Not yet implemented"
   (interactive)
@@ -572,9 +599,10 @@ See the `shelldoc--git-commands-filter' as sample."
 Toggle between default locale and todo"
   (interactive)
   (error "Not yet implemented")
-  (setq shelldoc--man-locale
-        (unless shelldoc--man-locale
-          (getenv "LANG"))))
+  ;; (setq shelldoc--man-locale
+  ;;       (unless shelldoc--man-locale
+  ;;         (getenv "LANG")))
+  )
 
 (defun shelldoc-isearch-forward-document ()
   "Incremental search text in document buffer."
@@ -589,9 +617,10 @@ Toggle between default locale and todo"
 (defun shelldoc-toggle-doc-window ()
   "Toggle shelldoc popup window is show/hide."
   (interactive)
-  (set-window-configuration shelldoc--saved-window-configuration)
   (setq shelldoc--suppress-popup
         (not shelldoc--suppress-popup))
+  (when shelldoc--suppress-popup
+    (shelldoc--delete-window))
   (unless (minibufferp)
     (message "Now shelldoc popup window is %s."
              (if shelldoc--suppress-popup
@@ -602,10 +631,9 @@ Toggle between default locale and todo"
   (let ((map (make-sparse-keymap)))
 
     (set-keymap-parent map minibuffer-local-shell-command-map)
+
     (define-key map  "\C-v" 'shelldoc-scroll-doc-window-up)
     (define-key map  "\ev" 'shelldoc-scroll-doc-window-down)
-    ;;TODO 2 time define
-    ;; (define-key map "\C-c\C-v" 'shelldoc-toggle-doc-window)
 
     (setq shelldoc-minibuffer-map map)))
 
@@ -622,6 +650,8 @@ Toggle between default locale and todo"
   (cond
    ((or (and (numberp arg) (cl-minusp arg))
         (and (null arg) shelldoc:on))
+    ;; all shelldoc window popup is disabled
+    (shelldoc--cancel-timer)
     (ad-disable-advice
      'read-shell-command 'before
      'shelldoc-initialize-read-shell-command)
@@ -641,7 +671,7 @@ Toggle between default locale and todo"
      'shelldoc-initialize-read-shell-command)
     (ad-activate 'read-shell-command)
     ;; reset innner variable
-    (setq shelldoc--suppress-popup nil)
+    (setq-default shelldoc--suppress-popup nil)
     ;; save old map
     (setq shelldoc--original-minibuffer-map
           minibuffer-local-shell-command-map)
@@ -686,6 +716,9 @@ Toggle between default locale and todo"
   (cond
    (shelldoc-minor-mode
     (add-hook 'kill-buffer-hook 'shelldoc--cleanup-when-kill-buffer)
+    ;; pcomplete (e.g. eshell)
+    (add-hook 'pcomplete-try-first-hook
+              'shelldoc-option-pcomplete nil t)
     ;; initialize internal vars
     (shelldoc--clear-showing)
     (setq shelldoc--saved-window-configuration
@@ -693,9 +726,12 @@ Toggle between default locale and todo"
     (shelldoc--maybe-start-timer))
    (t
     (remove-hook 'kill-buffer-hook 'shelldoc--cleanup-when-kill-buffer)
+    (remove-hook 'pcomplete-try-first-hook
+                 'shelldoc-option-pcomplete t)
     (shelldoc--maybe-cancel-timer)
     (when shelldoc--saved-window-configuration
-      (set-window-configuration shelldoc--saved-window-configuration))
+      (set-window-configuration shelldoc--saved-window-configuration)
+      (setq shelldoc--saved-window-configuration nil))
     (shelldoc--clear-showing)
     )))
 
@@ -710,8 +746,12 @@ Toggle between default locale and todo"
 (defvar shelldoc--idle-timer nil)
 
 (defun shelldoc--cleanup-when-kill-buffer ()
-  ;;TODO before killing buffer
+  ;; before killing buffer release some resource
   (shelldoc-minor-mode-off))
+
+(defun shelldoc--cancel-timer ()
+  (cancel-function-timers 'shelldoc-print-info)
+  (setq shelldoc--idle-timer nil))
 
 (defun shelldoc--maybe-cancel-timer ()
   (cl-loop for buf in (buffer-list)
@@ -719,8 +759,7 @@ Toggle between default locale and todo"
            return buf
            finally return
            (progn
-             (cancel-function-timers 'shelldoc-print-info)
-             (setq shelldoc--idle-timer nil)
+             (shelldoc--cancel-timer)
              t)))
 
 (defun shelldoc--maybe-start-timer ()
@@ -751,10 +790,9 @@ Toggle between default locale and todo"
        (shelldoc-minor-mode
         (shelldoc--print-command-info)))
     (shelldoc-quit
-     ;;TODO only minibuffer
-     ;; terminate shelldoc
+     ;; Do nothing. cannot show window but can prepare buffer.
      ;; (e.g. too small window to split window)
-     (shelldoc--minibuffer-cleanup))
+     )
     (error
      ;; do nothing
      )))
@@ -796,6 +834,7 @@ Toggle between default locale and todo"
 
 (defun shelldoc-unload-function ()
   (shelldoc -1)
+  ;; explicitly return nil to continue `unload-feature'
   nil)
 
 (provide 'shelldoc)
