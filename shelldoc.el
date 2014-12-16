@@ -3,7 +3,7 @@
 ;; Author: Masahiro Hayashi <mhayashi1120@gmail.com>
 ;; Keywords: applications
 ;; URL: http://github.com/mhayashi1120/Emacs-shelldoc/raw/master/shelldoc.el
-;; Version: 0.0.3
+;; Version: 0.0.4
 ;; Package-Requires: ((cl-lib "0.3") (s "1.9.0"))
 
 ;; This program is free software; you can redistribute it and/or
@@ -39,7 +39,7 @@
 ;; `C-c C-s` / `C-c C-r` to search the page.
 
 ;; You can complete `-' (hyphen) option at point.
-;; Try to type C-i after insert `-' when showing shelldoc window.
+;; Try to type C-i after insert `-'.
 
 ;; # Configuration
 
@@ -89,6 +89,17 @@
 
 (put 'shelldoc-quit 'error-conditions '(shelldoc-quit error))
 (put 'shelldoc-quit 'error-message "shelldoc error")
+
+;;;
+;;; Basic utility
+;;;
+
+(defun shelldoc--count-regexp-matching (regexp)
+  (goto-char (point-min))
+  (let ((count 0))
+    (while (re-search-forward regexp nil t)
+      (setq count (1+ count)))
+    count))
 
 ;;;
 ;;; Process
@@ -223,7 +234,9 @@ If you need to read default, set to nil."
 ;; Using `read' to implement easily.
 (defun shelldoc--parse-current-command-line ()
   (save-excursion
-    (let ((start (shelldoc--prompt-end)))
+    (let ((start (shelldoc--prompt-end))
+          ;; restrict to current line
+          (end (point-at-eol)))
       (skip-chars-backward "\s\t\n" start)
       (let ((first (point))
             before after)
@@ -234,7 +247,7 @@ If you need to read default, set to nil."
             (let ((segs (shelldoc--read-command-args)))
               (setq before (append before segs)))))
         (ignore-errors
-          (while t
+          (while (< (point) end)
             (let ((segs (shelldoc--read-command-args)))
               (setq after (append after segs)))))
         (list before after)))))
@@ -256,6 +269,38 @@ If you need to read default, set to nil."
    (not (string-match "=" text))
    ;; Detect general optional arg
    (not (string-match "\\`-" text))))
+
+(defun shelldoc--option-parsing-strategy ()
+  (with-current-buffer (shelldoc--popup-buffer)
+    (save-excursion
+      (let (
+            ;; e.g. ImageMagick `convert' (single-hiphen-word)
+            ;; "convert" "-adjoin"
+            (single-hiphen (shelldoc--count-regexp-matching
+                            "^[\s\t]+-[a-zA-Z0-9]\\{2,\\}"))
+            ;; e.g. `ls' or common unix command (common-unix-command)
+            ;; "ls" "-lha"
+            (common-unix (shelldoc--count-regexp-matching
+                          (eval-when-compile
+                            (concat
+                             "^[\s\t]+"
+                             (regexp-opt
+                              '(
+                                "-[a-zA-Z0-9]\\b"
+                                "--[a-zA-Z0-9]"
+                                ))))))
+            ;; e.g. `ps' (TODO: not implemented too complicated)
+            )
+        (if (> single-hiphen common-unix)
+            'single-hiphen 'common-unix)))))
+
+(defun shelldoc--split-compound-option (words)
+  (cl-loop for w in words
+           if (string-match "\\`-\\([a-zA-Z0-9]+\\)" w)
+           append (mapcar (lambda (c) (format "-%c" c))
+                          (string-to-list (match-string 1 w)))
+           else
+           append (list w)))
 
 ;;;
 ;;; Text manipulation
@@ -297,64 +342,6 @@ See the `shelldoc--git-commands-filter' as sample."
      (car last))))
 
 ;;;
-;;; Completion
-;;;
-
-;;TODO improve regexp
-;; OK: -a, --all
-;; NG: --all, -a (however no example..)
-(defconst shelldoc--man-option-re
-  (eval-when-compile
-    (mapconcat
-     'identity
-     '(
-       ;; general option segment start
-       "^\\(?:[\s\t]*\\(-[^\s\t\n,]+\\)\\)"
-       ;; long option
-       "\\(--[-_a-zA-Z0-9]+\\)"
-       )
-     "\\|")))
-
-;; gather text by REGEXP first subexp of captured
-(defun shelldoc--gather-regexp (regexp)
-  (let ((buf (shelldoc--popup-buffer))
-        (res '())
-        (depth (regexp-opt-depth regexp)))
-    (with-current-buffer buf
-      (goto-char (point-min))
-      (while (re-search-forward regexp nil t)
-        (let ((text (cl-loop for i from 1 to depth
-                             if (match-string-no-properties i)
-                             return (match-string-no-properties i))))
-          (unless (member text res)
-            (setq res (cons text res)))))
-      (nreverse res))))
-
-;; Adopted `completion-at-point'
-(defun shelldoc-option-completion ()
-  (save-excursion
-    (let ((end (point)))
-      (skip-chars-backward "^\s\t\n")
-      (when (looking-at "[\"']?\\(-\\)")
-        ;;TODO show window forcibly
-        ;; (shelldoc-print-info)
-        (let ((start (match-beginning 1))
-              (collection (shelldoc--gather-regexp
-                           shelldoc--man-option-re)))
-          (if collection
-              (list start end collection nil)
-            nil))))))
-
-;; Adopted `pcomplete'
-(defun shelldoc-option-pcomplete ()
-  (let ((arg (pcomplete-actual-arg)))
-    (when (string-match "\\`-" arg)
-      (let ((collection (shelldoc--gather-regexp
-                           shelldoc--man-option-re)))
-        (throw 'pcomplete-completions
-               (all-completions arg collection))))))
-
-;;;
 ;;; UI
 ;;;
 
@@ -373,8 +360,11 @@ See the `shelldoc--git-commands-filter' as sample."
   "Face to highlight word in shelldoc."
   :group 'shelldoc)
 
-(defvar-local shelldoc--current-man-name nil)
-(defvar-local shelldoc--current-commands nil)
+(defvar shelldoc--current-man-name nil)
+(make-variable-buffer-local 'shelldoc--current-man-name)
+
+(defvar shelldoc--current-commands nil)
+(make-variable-buffer-local 'shelldoc--current-commands)
 
 (defvar shelldoc--mode-line-format
   (eval-when-compile
@@ -390,8 +380,11 @@ See the `shelldoc--git-commands-filter' as sample."
 ;; window/buffer manipulation
 ;;
 
-(defvar-local shelldoc--saved-window-configuration nil)
-(defvar-local shelldoc--suppress-popup nil)
+(defvar shelldoc--saved-window-configuration nil)
+(make-variable-buffer-local 'shelldoc--saved-window-configuration)
+
+(defvar shelldoc--suppress-popup nil)
+(make-variable-buffer-local 'shelldoc--suppress-popup)
 
 (defun shelldoc--popup-buffer ()
   (let ((buf (get-buffer "*Shelldoc*")))
@@ -537,6 +530,19 @@ See the `shelldoc--git-commands-filter' as sample."
   (setq shelldoc--current-man-name nil)
   (setq shelldoc--current-commands nil))
 
+(defun shelldoc--prepare-popup-buffer ()
+  (cl-destructuring-bind (cmd-before cmd-after)
+      (shelldoc--parse-current-command-line)
+    (let ((cmd (shelldoc--guess-manpage-name cmd-before)))
+      (when cmd
+        (let ((man (shelldoc--get-manpage cmd)))
+          (unless (or (null man) (eq 'unavailable man))
+            (cl-destructuring-bind (name page) man
+              (unless (equal name shelldoc--current-man-name)
+                (shelldoc--prepare-man-page page)
+                (setq shelldoc--current-man-name name))
+              t)))))))
+
 (defun shelldoc--print-command-info ()
   (cl-destructuring-bind (cmd-before cmd-after)
       (shelldoc--parse-current-command-line)
@@ -558,10 +564,14 @@ See the `shelldoc--git-commands-filter' as sample."
                 (shelldoc--prepare-man-page page)
                 (setq shelldoc--current-man-name name)))
 
-            (let ((changed (not (equal shelldoc--current-commands
-                                       cmd-before))))
+            (let* ((strategy (shelldoc--option-parsing-strategy))
+                   (words (if (eq strategy 'common-unix)
+                              (shelldoc--split-compound-option cmd-before)
+                            cmd-before))
+                   (changed (not (equal shelldoc--current-commands words))))
               (when changed
-                (shelldoc--prepare-buffer cmd-before)
+                (shelldoc--prepare-buffer words)
+                ;; using literal parsed value to compare equality
                 (setq shelldoc--current-commands cmd-before))
               (unless shelldoc--suppress-popup
                 ;; arrange window visibility.
@@ -569,7 +579,65 @@ See the `shelldoc--git-commands-filter' as sample."
                 (let ((win (shelldoc--prepare-window)))
                   ;; set `window-start' when change command line virtually
                   (when changed
-                    (shelldoc--set-window-cursor win cmd-before)))))))))))))
+                    (shelldoc--set-window-cursor win words)))))))))))))
+
+;;
+;; Completion
+;;
+
+;;TODO improve regexp
+;; OK: -a, --all
+;; NG: --all, -a (however no example..)
+(defconst shelldoc--man-option-re
+  (eval-when-compile
+    (mapconcat
+     'identity
+     '(
+       ;; general option segment start
+       "^\\(?:[\s\t]*\\(-[^\s\t\n,]+\\)\\)"
+       ;; long option
+       "\\(--[-_a-zA-Z0-9]+\\)"
+       )
+     "\\|")))
+
+;; gather text by REGEXP first subexp of captured
+(defun shelldoc--gather-regexp (regexp)
+  (let ((buf (shelldoc--popup-buffer))
+        (res '())
+        (depth (regexp-opt-depth regexp)))
+    (with-current-buffer buf
+      (goto-char (point-min))
+      (while (re-search-forward regexp nil t)
+        (let ((text (cl-loop for i from 1 to depth
+                             if (match-string-no-properties i)
+                             return (match-string-no-properties i))))
+          (unless (member text res)
+            (setq res (cons text res)))))
+      (nreverse res))))
+
+;; Adopted `completion-at-point'
+(defun shelldoc-option-completion ()
+  (save-excursion
+    (let ((end (point)))
+      (skip-chars-backward "^\s\t\n")
+      (when (looking-at "[\"']?\\(-\\)")
+        (let ((start (match-beginning 1)))
+          (when (shelldoc--prepare-popup-buffer)
+            (let ((collection (shelldoc--gather-regexp
+                               shelldoc--man-option-re)))
+              (if collection
+                  (list start end collection nil)
+                nil))))))))
+
+;; Adopted `pcomplete'
+(defun shelldoc-option-pcomplete ()
+  (let ((arg (pcomplete-actual-arg)))
+    (when (string-match "\\`-" arg)
+      (when (shelldoc--prepare-popup-buffer)
+        (let ((collection (shelldoc--gather-regexp
+                           shelldoc--man-option-re)))
+          (throw 'pcomplete-completions
+                 (all-completions arg collection)))))))
 
 ;;
 ;; Command
