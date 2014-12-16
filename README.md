@@ -3,8 +3,7 @@ shelldoc.el
 
 Improve edit shell command in minibuffer.
 
-Install
-=======
+# Install
 
 Please install this package from MELPA. (http://melpa.milkbox.net/)
 
@@ -14,20 +13,39 @@ You may need some extra packages.
 
     (require 'shelldoc)
 
-Usage
-=====
+Now you can see man page when `read-shell-command` is invoked.
+e.g. M-x shell-command
+`C-v` / `M-v` to scroll the man page window.
+`C-c C-s` / `C-c C-r` to search the page.
 
-Now you can see man page when `read-shell-command' is invoked.
-C-v/M-v to scroll the man page window.
-C-c C-s / C-c C-r to search the page.
+You can complete `-' (hyphen) option at point.
+Try to type C-i after insert `-' when showing shelldoc window.
 
-* You can complete `-' (hyphen) option at point.
-  Try to type C-i after insert `-' when showing shelldoc window.
+# Configuration
 
-* You may install new man page after shelldoc:
+## To show original man page initially. (probably english)
+
+    (setq shelldoc-keep-man-locale nil)
+
+## You may install new man page after shelldoc:
 
     M-x shelldoc-clear-cache
 
-* To toggle shelldoc popup:
+## shelldoc is working as a minor mode if you desire.
+
+### eshell
+
+    (add-hook 'eshell-mode-hook 'shelldoc-minor-mode-on)
+
+### sh-mode (editing shell script)
+
+    (add-hook 'sh-mode-hook 'shelldoc-minor-mode-on)
+
+### M-x shell
+
+    (add-hook 'shell-mode-hook 'shelldoc-minor-mode-on)
+
+## To toggle shelldoc feature.
 
     M-x shelldoc
+
