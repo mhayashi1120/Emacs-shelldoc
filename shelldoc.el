@@ -169,8 +169,11 @@ If you need to read default, set to nil."
   (cond
    ((minibufferp)
     (minibuffer-prompt-end))
+   ;; TODO
    ((derived-mode-p 'shell-mode)
-    (process-mark (get-buffer-process (current-buffer))))
+    (let ((proc (get-buffer-process (current-buffer))))
+      ;;TODO
+      (process-mark proc)))
    ((derived-mode-p 'eshell-mode)
     eshell-last-output-end)
    (t
@@ -327,9 +330,10 @@ See the `shelldoc--git-commands-filter' as sample."
   "Face to highlight word in shelldoc."
   :group 'shelldoc)
 
-(defvar shelldoc--current-man-name nil)
-(defvar shelldoc--current-commands nil)
+(defvar-local shelldoc--current-man-name nil)
+(defvar-local shelldoc--current-commands nil)
 
+;;TODO only minibuffer
 (defvar shelldoc--mode-line
   (eval-when-compile
     (concat
@@ -343,7 +347,7 @@ See the `shelldoc--git-commands-filter' as sample."
 ;; window/buffer manipulation
 ;;
 
-(defvar shelldoc--saved-window-configuration nil)
+(defvar-local shelldoc--saved-window-configuration nil)
 
 (defun shelldoc--popup-buffer ()
   (let ((buf (get-buffer "*Shelldoc*")))
@@ -376,6 +380,7 @@ See the `shelldoc--git-commands-filter' as sample."
 
 (defun shelldoc--prepare-window ()
   (let* ((buf (shelldoc--popup-buffer))
+         (orig-win (selected-window))
          (all-wins (shelldoc--windows-bigger-order))
          (winlist (cl-remove-if-not
                    (lambda (w)
@@ -395,7 +400,7 @@ See the `shelldoc--git-commands-filter' as sample."
                   (error
                    (signal 'shelldoc-quit nil)))))
           (set-window-buffer newwin buf)
-          (select-window (minibuffer-window) t)
+          (select-window orig-win t)
           newwin))))
 
 (defun shelldoc--set-window-cursor (win words)
@@ -633,6 +638,51 @@ Toggle between default locale and todo"
   (unless no-msg
     (message "shelldoc cache has been cleared.")))
 
+(define-minor-mode shelldoc-minor-mode
+  ""
+  nil nil nil
+  (cond
+   (shelldoc-minor-mode
+    ;;TODO kill-buffer-hook maybe kill timer
+    ;; initialize internal vars
+    (shelldoc--clear-showing)
+    (setq shelldoc--saved-window-configuration
+          (current-window-configuration))
+    (shelldoc--maybe-start-timer))
+   (t
+    (shelldoc--maybe-cancel-timer)
+    (set-window-configuration shelldoc--saved-window-configuration)
+    (shelldoc--clear-showing)
+    (kill-buffer (shelldoc--popup-buffer)))))
+
+(defun shelldoc-minor-mode-on ()
+  (interactive)
+  (shelldoc-minor-mode 1))
+
+(defun shelldoc-minor-mode-off ()
+  (interactive)
+  (shelldoc-minor-mode -1))
+
+(defvar shelldoc--idle-timer nil)
+
+(defun shelldoc--cleanup-maybe (&optional will-be-killed-buffer)
+  (shelldoc--maybe-cancel-timer))
+
+(defun shelldoc--maybe-cancel-timer ()
+  (cl-loop for buf in (buffer-list)
+           if (buffer-local-value 'shelldoc-minor-mode buf)
+           return buf
+           finally return
+           (progn
+             (cancel-function-timers 'shelldoc-print-info)
+             (setq shelldoc--idle-timer nil)
+             t)))
+
+(defun shelldoc--maybe-start-timer ()
+  (unless shelldoc--idle-timer
+    (setq shelldoc--idle-timer
+          (run-with-idle-timer shelldoc-idle-delay t 'shelldoc-print-info))))
+
 ;;;
 ;;; Load
 ;;;
@@ -653,12 +703,16 @@ Toggle between default locale and todo"
 (defun shelldoc-print-info ()
   (condition-case nil
       (cond
-       ((minibufferp)
+       (shelldoc-minor-mode
         (shelldoc--print-command-info)))
     (shelldoc-quit
+     ;;TODO only minibuffer
      ;; terminate shelldoc
      ;; (e.g. too small window to split window)
-     (shelldoc--minibuffer-cleanup))))
+     (shelldoc--minibuffer-cleanup))
+    (error
+     ;; do nothing
+     )))
 
 (defun shelldoc--minibuffer-initialize ()
   (when (= (minibuffer-depth) shelldoc--minibuffer-depth)
@@ -666,22 +720,15 @@ Toggle between default locale and todo"
     (remove-hook 'minibuffer-setup-hook 'shelldoc--minibuffer-initialize)
     ;; add finalizer
     (add-hook 'minibuffer-exit-hook 'shelldoc--minibuffer-cleanup)
-    ;; initialize internal vars
-    (shelldoc--clear-showing)
-    (setq shelldoc--saved-window-configuration
-          (current-window-configuration))
-    (run-with-idle-timer shelldoc-idle-delay t 'shelldoc-print-info)))
+    (shelldoc-minor-mode-on)))
 
 (defun shelldoc--minibuffer-cleanup ()
   ;; checking minibuffer-depth (e.g. helm conflict this)
   ;; lambda expression hard to `remove-hook' it
   (when (= (minibuffer-depth) shelldoc--minibuffer-depth)
+    (shelldoc-minor-mode-off)
     ;; remove me
-    (remove-hook 'minibuffer-exit-hook 'shelldoc--minibuffer-cleanup)
-    (cancel-function-timers 'shelldoc-print-info)
-    (shelldoc--clear-showing)
-    (set-window-configuration shelldoc--saved-window-configuration)
-    (kill-buffer (shelldoc--popup-buffer))))
+    (remove-hook 'minibuffer-exit-hook 'shelldoc--minibuffer-cleanup)))
 
 ;;;###autoload
 (defun shelldoc--minibuffer-setup ()
@@ -704,7 +751,6 @@ Toggle between default locale and todo"
 
 (defun shelldoc-unload-function ()
   (shelldoc -1)
-  ;; explicitly return nil to continue `unload-feature'
   nil)
 
 (provide 'shelldoc)
