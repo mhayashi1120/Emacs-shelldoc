@@ -858,7 +858,9 @@ Toggle between default locale and todo"
   (condition-case nil
       (cond
        (shelldoc-minor-mode
-        (shelldoc--print-command-info)))
+        (shelldoc--print-command-info))
+       ;; cleanup if switching buffer has no shelldoc.
+       (shelldoc--delete-window))
     (shelldoc-quit
      ;; Do nothing. cannot show window but can prepare buffer.
      ;; (e.g. too small window to split window)
