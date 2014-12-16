@@ -3,7 +3,7 @@
 ;; Author: Masahiro Hayashi <mhayashi1120@gmail.com>
 ;; Keywords: applications
 ;; URL: http://github.com/mhayashi1120/Emacs-shelldoc/raw/master/shelldoc.el
-;; Version: 0.0.2
+;; Version: 0.0.3
 ;; Package-Requires: ((cl-lib "0.3") (s "1.9.0"))
 
 ;; This program is free software; you can redistribute it and/or
@@ -73,10 +73,18 @@
 
 (defvar shelldoc--man-locale nil)
 
+(defcustom shelldoc-keep-man-locale t
+  "To keep man language on your environment.
+If you need to read default, set to nil."
+  :group 'shelldoc
+  :type 'boolean)
+
 (defmacro shelldoc--man-environ (&rest form)
   `(with-temp-buffer
      (let ((process-environment (copy-sequence process-environment)))
-       (setenv "LANG" "C")
+       (setenv "LANG" (if shelldoc-keep-man-locale
+                          (getenv "LANG")
+                        "C"))
        ;; unset unnecessary env variables
        (setenv "MANROFFSEQ")
        (setenv "MANSECT")
@@ -156,10 +164,22 @@
 ;;; Parsing
 ;;;
 
+(defvar eshell-last-output-end)
+(defun shelldoc--prompt-end ()
+  (cond
+   ((minibufferp)
+    (minibuffer-prompt-end))
+   ((derived-mode-p 'shell-mode)
+    (process-mark (get-buffer-process (current-buffer))))
+   ((derived-mode-p 'eshell-mode)
+    eshell-last-output-end)
+   (t
+    (signal 'shelldoc-quit (list "Not supported")))))
+
 ;; Using `read' to implement easily.
 (defun shelldoc--parse-current-command-line ()
   (save-excursion
-    (let ((start (minibuffer-prompt-end)))
+    (let ((start (shelldoc--prompt-end)))
       (skip-chars-backward "\s\t\n" start)
       (let ((first (point))
             before after)
@@ -617,16 +637,16 @@ Toggle between default locale and todo"
 ;;; Load
 ;;;
 
-;; shelldoc--setup:
-;;  minibuffer-setup-hook <- shelldoc--initialize
-;; shelldoc--initialize:
-;;  minibuffer-setup-hook -> shelldoc--initialize
-;;  minibuffer-exit-hook <- shelldoc--cleanup
+;; shelldoc--minibuffer-setup:
+;;  minibuffer-setup-hook <- shelldoc--minibuffer-initialize
+;; shelldoc--minibuffer-initialize:
+;;  minibuffer-setup-hook -> shelldoc--minibuffer-initialize
+;;  minibuffer-exit-hook <- shelldoc--minibuffer-cleanup
 ;;
 ;; Now shelldoc is working on timer:
 ;;
-;; shelldoc--cleanup:
-;;  minibuffer-exit-hook -> shelldoc--cleanup
+;; shelldoc--minibuffer-cleanup:
+;;  minibuffer-exit-hook -> shelldoc--minibuffer-cleanup
 
 (defvar shelldoc--minibuffer-depth nil)
 
@@ -638,34 +658,34 @@ Toggle between default locale and todo"
     (shelldoc-quit
      ;; terminate shelldoc
      ;; (e.g. too small window to split window)
-     (shelldoc--cleanup))))
+     (shelldoc--minibuffer-cleanup))))
 
-(defun shelldoc--initialize ()
+(defun shelldoc--minibuffer-initialize ()
   (when (= (minibuffer-depth) shelldoc--minibuffer-depth)
     ;; remove me
-    (remove-hook 'minibuffer-setup-hook 'shelldoc--initialize)
+    (remove-hook 'minibuffer-setup-hook 'shelldoc--minibuffer-initialize)
     ;; add finalizer
-    (add-hook 'minibuffer-exit-hook 'shelldoc--cleanup)
+    (add-hook 'minibuffer-exit-hook 'shelldoc--minibuffer-cleanup)
     ;; initialize internal vars
     (shelldoc--clear-showing)
     (setq shelldoc--saved-window-configuration
           (current-window-configuration))
     (run-with-idle-timer shelldoc-idle-delay t 'shelldoc-print-info)))
 
-(defun shelldoc--cleanup ()
+(defun shelldoc--minibuffer-cleanup ()
   ;; checking minibuffer-depth (e.g. helm conflict this)
   ;; lambda expression hard to `remove-hook' it
   (when (= (minibuffer-depth) shelldoc--minibuffer-depth)
     ;; remove me
-    (remove-hook 'minibuffer-exit-hook 'shelldoc--cleanup)
+    (remove-hook 'minibuffer-exit-hook 'shelldoc--minibuffer-cleanup)
     (cancel-function-timers 'shelldoc-print-info)
     (shelldoc--clear-showing)
     (set-window-configuration shelldoc--saved-window-configuration)
     (kill-buffer (shelldoc--popup-buffer))))
 
 ;;;###autoload
-(defun shelldoc--setup ()
-  (add-hook 'minibuffer-setup-hook 'shelldoc--initialize)
+(defun shelldoc--minibuffer-setup ()
+  (add-hook 'minibuffer-setup-hook 'shelldoc--minibuffer-initialize)
   (setq shelldoc--minibuffer-depth (1+ (minibuffer-depth))))
 
 ;; FIXME: switch to nadvice
@@ -673,7 +693,7 @@ Toggle between default locale and todo"
 (defadvice read-shell-command
     ;; default is `activate'
     (before shelldoc-initialize-read-shell-command () activate)
-  (shelldoc--setup))
+  (shelldoc--minibuffer-setup))
 
 ;; activate (after autoload / manually load)
 (shelldoc 1)
