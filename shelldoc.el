@@ -3,7 +3,7 @@
 ;; Author: Masahiro Hayashi <mhayashi1120@gmail.com>
 ;; Keywords: applications
 ;; URL: http://github.com/mhayashi1120/Emacs-shelldoc/raw/master/shelldoc.el
-;; Version: 0.0.3
+;; Version: 0.0.4
 ;; Package-Requires: ((cl-lib "0.3") (s "1.9.0"))
 
 ;; This program is free software; you can redistribute it and/or
@@ -790,7 +790,10 @@ Toggle between default locale and todo"
   (condition-case nil
       (cond
        (shelldoc-minor-mode
-        (shelldoc--print-command-info)))
+        (shelldoc--print-command-info))
+       (t
+        ;; cleanup if switching buffer has no shelldoc.
+        (shelldoc--delete-window)))
     (shelldoc-quit
      ;; Do nothing. cannot show window but can prepare buffer.
      ;; (e.g. too small window to split window)
