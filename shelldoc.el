@@ -3,7 +3,7 @@
 ;; Author: Masahiro Hayashi <mhayashi1120@gmail.com>
 ;; Keywords: applications
 ;; URL: http://github.com/mhayashi1120/Emacs-shelldoc/raw/master/shelldoc.el
-;; Version: 0.0.4
+;; Version: 0.0.5
 ;; Package-Requires: ((cl-lib "0.3") (s "1.9.0"))
 
 ;; This program is free software; you can redistribute it and/or
@@ -791,6 +791,8 @@ Toggle between default locale and todo"
       (cond
        (shelldoc-minor-mode
         (shelldoc--print-command-info))
+       ;; TODO work around suppress closing window when `shelldoc-isearch-*'
+       ((eq (current-buffer) (shelldoc--popup-buffer)))
        (t
         ;; cleanup if switching buffer has no shelldoc.
         (shelldoc--delete-window)))
