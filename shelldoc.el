@@ -73,6 +73,7 @@
 ;;; TODO:
 ;; * multilingual man page
 ;; * support tramp (`call-process' -> `process-file' consider cache key)
+;; * show what the man page is. in mode-line.
 
 ;;; Code:
 
