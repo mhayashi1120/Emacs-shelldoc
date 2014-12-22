@@ -3,7 +3,7 @@
 ;; Author: Masahiro Hayashi <mhayashi1120@gmail.com>
 ;; Keywords: applications
 ;; URL: http://github.com/mhayashi1120/Emacs-shelldoc/raw/master/shelldoc.el
-;; Version: 0.0.5
+;; Version: 0.0.6
 ;; Package-Requires: ((cl-lib "0.3") (s "1.9.0"))
 
 ;; This program is free software; you can redistribute it and/or
@@ -233,25 +233,30 @@ If you need to read default, set to nil."
     (signal 'shelldoc-quit (list "Not supported")))))
 
 ;; Using `read' to implement easily.
-(defun shelldoc--parse-current-command-line ()
+(defun shelldoc--parse-current-command-line (&optional split-here)
   (save-excursion
-    (let ((start (shelldoc--prompt-end))
-          ;; restrict to current line
-          (end (point-at-eol)))
-      (skip-chars-backward "\s\t\n" start)
-      (let ((first (point))
-            before after)
-        (goto-char start)
-        (ignore-errors
-          ;; cursor is after command
-          (while (< (point) first)
-            (let ((segs (shelldoc--read-command-args)))
-              (setq before (append before segs)))))
-        (ignore-errors
-          (while (< (point) end)
-            (let ((segs (shelldoc--read-command-args)))
-              (setq after (append after segs)))))
-        (list before after)))))
+    (save-restriction
+      (let ((start (shelldoc--prompt-end))
+            ;; restrict to current line
+            (end (point-at-eol)))
+        (skip-chars-backward "\s\t\n" start)
+        (when split-here
+          (narrow-to-region start (point)))
+        (let ((first (point))
+              before after)
+          (goto-char start)
+          (ignore-errors
+            ;; cursor is after command
+            (while (< (point) first)
+              (let ((segs (shelldoc--read-command-args)))
+                (setq before (append before segs)))))
+          (when split-here
+            (widen))
+          (ignore-errors
+            (while (< (point) end)
+              (let ((segs (shelldoc--read-command-args)))
+                (setq after (append after segs)))))
+          (list before after))))))
 
 (defun shelldoc--read-command-args ()
   (skip-chars-forward ";\s\t\n")
@@ -275,11 +280,11 @@ If you need to read default, set to nil."
   (with-current-buffer (shelldoc--popup-buffer)
     (save-excursion
       (let (
-            ;; e.g. ImageMagick `convert' (single-hiphen-word)
+            ;; e.g. ImageMagick `convert' (single-hiphen)
             ;; "convert" "-adjoin"
             (single-hiphen (shelldoc--count-regexp-matching
                             "^[\s\t]+-[a-zA-Z0-9]\\{2,\\}"))
-            ;; e.g. `ls' or common unix command (common-unix-command)
+            ;; e.g. `ls' or common unix command (common-unix)
             ;; "ls" "-lha"
             (common-unix (shelldoc--count-regexp-matching
                           (eval-when-compile
@@ -387,6 +392,9 @@ See the `shelldoc--git-commands-filter' as sample."
 (defvar shelldoc--suppress-popup nil)
 (make-variable-buffer-local 'shelldoc--suppress-popup)
 
+(defvar shelldoc--popup-buffer-p nil)
+(make-variable-buffer-local 'shelldoc--popup-buffer-p)
+
 (defun shelldoc--popup-buffer ()
   (let ((buf (get-buffer "*Shelldoc*")))
     (unless buf
@@ -398,7 +406,8 @@ See the `shelldoc--git-commands-filter' as sample."
           (kill-all-local-variables)
           (setq buffer-undo-list t)
           (setq mode-line-format
-                `(,mode-line)))))
+                `(,mode-line))
+          (setq shelldoc--popup-buffer-p t))))
     buf))
 
 (defun shelldoc--windows-bigger-order ()
@@ -531,6 +540,7 @@ See the `shelldoc--git-commands-filter' as sample."
   (setq shelldoc--current-man-name nil)
   (setq shelldoc--current-commands nil))
 
+;; to prepare man buffer to complete options.
 (defun shelldoc--prepare-popup-buffer ()
   (cl-destructuring-bind (cmd-before cmd-after)
       (shelldoc--parse-current-command-line)
@@ -544,6 +554,7 @@ See the `shelldoc--git-commands-filter' as sample."
                 (setq shelldoc--current-man-name name))
               t)))))))
 
+;; prepare man buffer and popup window.
 (defun shelldoc--print-command-info ()
   (cl-destructuring-bind (cmd-before cmd-after)
       (shelldoc--parse-current-command-line)
@@ -565,22 +576,31 @@ See the `shelldoc--git-commands-filter' as sample."
                 (shelldoc--prepare-man-page page)
                 (setq shelldoc--current-man-name name)))
 
-            (let* ((strategy (shelldoc--option-parsing-strategy))
-                   (words (if (eq strategy 'common-unix)
-                              (shelldoc--split-compound-option cmd-before)
-                            cmd-before))
-                   (changed (not (equal shelldoc--current-commands words))))
-              (when changed
-                (shelldoc--prepare-buffer words)
-                ;; using literal parsed value to compare equality
-                (setq shelldoc--current-commands cmd-before))
-              (unless shelldoc--suppress-popup
-                ;; arrange window visibility.
-                ;; may be deleted multiple buffer window.
-                (let ((win (shelldoc--prepare-window)))
-                  ;; set `window-start' when change command line virtually
-                  (when changed
-                    (shelldoc--set-window-cursor win words)))))))))))))
+            (let ((strategy (shelldoc--option-parsing-strategy))
+                  words)
+              (cond
+               ((eq strategy 'common-unix)
+                (cl-destructuring-bind (cmd-before2 cmd-after2)
+                    ;; fallback command-line parsing after detect
+                    ;; option parsing rule.
+                    (shelldoc--parse-current-command-line t)
+                  (setq cmd-before cmd-before2)
+                  (setq cmd-after cmd-after2))
+                (setq words (shelldoc--split-compound-option cmd-before)))
+               (t
+                (setq words cmd-before)))
+              (let ((changed (not (equal shelldoc--current-commands words))))
+                (when changed
+                  (shelldoc--prepare-buffer words)
+                  ;; using literal parsed value to compare equality
+                  (setq shelldoc--current-commands cmd-before))
+                (unless shelldoc--suppress-popup
+                  ;; arrange window visibility.
+                  ;; may be deleted multiple buffer window.
+                  (let ((win (shelldoc--prepare-window)))
+                    ;; set `window-start' when change command line virtually
+                    (when changed
+                      (shelldoc--set-window-cursor win words))))))))))))))
 
 ;;
 ;; Completion
@@ -860,8 +880,7 @@ Toggle between default locale and todo"
       (cond
        (shelldoc-minor-mode
         (shelldoc--print-command-info))
-       ;; TODO work around suppress closing window when `shelldoc-isearch-*'
-       ((eq (current-buffer) (shelldoc--popup-buffer)))
+       (shelldoc--popup-buffer-p)
        (t
         ;; cleanup if switching buffer has no shelldoc.
         (shelldoc--delete-window)))
