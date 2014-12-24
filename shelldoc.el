@@ -38,8 +38,8 @@
 ;; `C-v` / `M-v` to scroll the man page window.
 ;; `C-c C-s` / `C-c C-r` to search the page.
 
-;; You can complete `-' (hyphen) option at point.
-;; Try to type C-i after insert `-'.
+;; You can complete `-` (hyphen) option at point.
+;; Try to type C-i after insert `-`.
 
 ;; # Configuration
 
@@ -68,7 +68,6 @@
 ;; ## To toggle shelldoc feature.
 
 ;;     M-x shelldoc
-
 
 ;;; TODO:
 ;; * multilingual man page

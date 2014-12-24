@@ -18,8 +18,8 @@ e.g. M-x shell-command
 `C-v` / `M-v` to scroll the man page window.
 `C-c C-s` / `C-c C-r` to search the page.
 
-You can complete `-' (hyphen) option at point.
-Try to type C-i after insert `-' when showing shelldoc window.
+You can complete `-` (hyphen) option at point.
+Try to type C-i after insert `-`.
 
 # Configuration
 
@@ -48,4 +48,3 @@ Try to type C-i after insert `-' when showing shelldoc window.
 ## To toggle shelldoc feature.
 
     M-x shelldoc
-
