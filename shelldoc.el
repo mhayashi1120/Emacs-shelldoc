@@ -2,7 +2,7 @@
 
 ;; Author: Masahiro Hayashi <mhayashi1120@gmail.com>
 ;; Keywords: applications
-;; URL: http://github.com/mhayashi1120/Emacs-shelldoc/raw/master/shelldoc.el
+;; URL: http://github.com/mhayashi1120/Emacs-shelldoc
 ;; Version: 0.1.0
 ;; Package-Requires: ((cl-lib "0.3") (s "1.9.0"))
 
