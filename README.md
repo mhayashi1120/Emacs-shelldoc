@@ -1,7 +1,5 @@
 shelldoc.el
-============
-
-Improve edit shell command in minibuffer.
+===========
 
 ## Install
 
@@ -11,7 +9,9 @@ Otherwise put this file into load-path'ed directory.
 And put the following expression into your ~/.emacs.
 You may need some extra packages.
 
-    (require 'shelldoc)
+```
+(require 'shelldoc)
+```
 
 Now you can see man page when `read-shell-command` is invoked.
 e.g. M-x shell-command
@@ -23,28 +23,48 @@ Try to type C-i after insert `-`.
 
 ## Configuration
 
+* To suppress popup window initially.
+  Type `C-c C-v` to show the shelldoc window again.
+
+```
+(setq shelldoc-initial-suppress-popup t)
+```
+
 * To show original man page initially. (probably english)
 
-    (setq shelldoc-keep-man-locale nil)
+```
+(setq shelldoc-keep-man-locale nil)
+```
 
 * You may install new man page after shelldoc:
 
-    M-x shelldoc-clear-cache
+```
+M-x shelldoc-clear-cache
+```
 
 * shelldoc is working as a minor mode if you desire.
 
  * eshell
 
-    (add-hook 'eshell-mode-hook 'shelldoc-minor-mode-on)
+```
+(add-hook 'eshell-mode-hook 'shelldoc-minor-mode-on)
+```
 
  * sh-mode (editing shell script)
 
-    (add-hook 'sh-mode-hook 'shelldoc-minor-mode-on)
+```
+(add-hook 'sh-mode-hook 'shelldoc-minor-mode-on)
+```
 
  * M-x shell
 
-    (add-hook 'shell-mode-hook 'shelldoc-minor-mode-on)
+```
+(add-hook 'shell-mode-hook 'shelldoc-minor-mode-on)
+```
 
 * To toggle shelldoc feature.
 
-    M-x shelldoc
+```
+M-x shelldoc
+```
+

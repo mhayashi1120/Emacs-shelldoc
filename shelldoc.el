@@ -3,7 +3,7 @@
 ;; Author: Masahiro Hayashi <mhayashi1120@gmail.com>
 ;; Keywords: applications
 ;; URL: http://github.com/mhayashi1120/Emacs-shelldoc/raw/master/shelldoc.el
-;; Version: 0.0.7
+;; Version: 0.1.0
 ;; Package-Requires: ((cl-lib "0.3") (s "1.9.0"))
 
 ;; This program is free software; you can redistribute it and/or
@@ -42,6 +42,11 @@
 ;; Try to type C-i after insert `-`.
 
 ;; ## Configuration
+
+;; * To suppress popup window initially.
+;;   Type `C-c C-v` to show the shelldoc window again.
+
+;;     (setq shelldoc-initial-suppress-popup t)
 
 ;; * To show original man page initially. (probably english)
 
@@ -354,6 +359,11 @@ See the `shelldoc--git-commands-filter' as sample."
   "Seconds to delay until popup man page."
   :group 'shelldoc
   :type 'number)
+
+(defcustom shelldoc-initial-suppress-popup nil
+  "Suppress popup window initially."
+  :group 'shelldoc
+  :type 'boolean)
 
 (defface shelldoc-short-help-face
   '((t :inherit match))
@@ -811,6 +821,8 @@ Toggle between default locale and todo"
               'shelldoc-option-pcomplete nil t)
     ;; initialize internal vars
     (shelldoc--clear-showing)
+    (setq shelldoc--suppress-popup
+          shelldoc-initial-suppress-popup)
     (setq shelldoc--saved-window-configuration
           (current-window-configuration))
     (shelldoc--maybe-start-timer))
@@ -861,16 +873,19 @@ Toggle between default locale and todo"
 ;;; Load
 ;;;
 
-;; shelldoc--minibuffer-setup:
+;; 1. shelldoc--minibuffer-setup:
 ;;  minibuffer-setup-hook <- shelldoc--minibuffer-initialize
-;; shelldoc--minibuffer-initialize:
+
+;; 2. shelldoc--minibuffer-initialize:
 ;;  minibuffer-setup-hook -> shelldoc--minibuffer-initialize
 ;;  minibuffer-exit-hook <- shelldoc--minibuffer-cleanup
-;;
+
 ;; Now shelldoc is working on timer:
-;;
-;; shelldoc--minibuffer-cleanup:
+
+;; 3. shelldoc--minibuffer-cleanup:
 ;;  minibuffer-exit-hook -> shelldoc--minibuffer-cleanup
+
+;; Now shelldoc is deactivated.
 
 (defvar shelldoc--minibuffer-depth nil)
 
