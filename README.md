@@ -3,7 +3,7 @@ shelldoc.el
 
 ## Install
 
-Please install this package from MELPA. (http://melpa.milkbox.net/)
+Please install this package from MELPA. (https://melpa.org/)
 
 Otherwise put this file into load-path'ed directory.
 And put the following expression into your ~/.emacs.
