@@ -3,7 +3,7 @@
 ;; Author: Masahiro Hayashi <mhayashi1120@gmail.com>
 ;; Keywords: applications
 ;; URL: http://github.com/mhayashi1120/Emacs-shelldoc
-;; Version: 0.1.0
+;; Version: 0.1.2
 ;; Package-Requires: ((cl-lib "0.3") (s "1.9.0"))
 
 ;; This program is free software; you can redistribute it and/or
@@ -27,7 +27,7 @@
 
 ;; Please install this package from MELPA. (https://melpa.org/)
 
-;; Otherwise put this file into load-path'ed directory.
+;; Otherwise, put this file into load-path'ed directory.
 ;; And put the following expression into your ~/.emacs.
 ;; You may need some extra packages.
 
@@ -42,11 +42,6 @@
 ;; Try to type C-i after insert `-`.
 
 ;; ## Configuration
-
-;; * To suppress popup window initially.
-;;   Type `C-c C-v` to show the shelldoc window again.
-
-;;     (setq shelldoc-initial-suppress-popup t)
 
 ;; * To show original man page initially. (probably english)
 
@@ -360,11 +355,6 @@ See the `shelldoc--git-commands-filter' as sample."
   :group 'shelldoc
   :type 'number)
 
-(defcustom shelldoc-initial-suppress-popup nil
-  "Suppress popup window initially."
-  :group 'shelldoc
-  :type 'boolean)
-
 (defface shelldoc-short-help-face
   '((t :inherit match))
   "Face to highlight word in shelldoc."
@@ -399,7 +389,6 @@ See the `shelldoc--git-commands-filter' as sample."
 (make-variable-buffer-local 'shelldoc--saved-window-configuration)
 
 (defvar shelldoc--suppress-popup nil)
-(make-variable-buffer-local 'shelldoc--suppress-popup)
 
 (defvar shelldoc--popup-buffer-p nil)
 (make-variable-buffer-local 'shelldoc--popup-buffer-p)
@@ -821,8 +810,6 @@ Toggle between default locale and todo"
               'shelldoc-option-pcomplete nil t)
     ;; initialize internal vars
     (shelldoc--clear-showing)
-    (setq shelldoc--suppress-popup
-          shelldoc-initial-suppress-popup)
     (setq shelldoc--saved-window-configuration
           (current-window-configuration))
     (shelldoc--maybe-start-timer))
@@ -836,10 +823,6 @@ Toggle between default locale and todo"
       (setq shelldoc--saved-window-configuration nil))
     (shelldoc--clear-showing)
     )))
-
-(defun shelldoc-minor-mode-on ()
-  (interactive)
-  (shelldoc-minor-mode 1))
 
 (defun shelldoc-minor-mode-off ()
   (interactive)
@@ -921,6 +904,11 @@ Toggle between default locale and todo"
     (shelldoc-minor-mode-off)
     ;; remove me
     (remove-hook 'minibuffer-exit-hook 'shelldoc--minibuffer-cleanup)))
+
+;;;###autoload
+(defun shelldoc-minor-mode-on ()
+  (interactive)
+  (shelldoc-minor-mode 1))
 
 ;;;###autoload
 (defun shelldoc--minibuffer-setup ()

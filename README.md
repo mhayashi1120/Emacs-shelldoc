@@ -5,7 +5,7 @@ shelldoc.el
 
 Please install this package from MELPA. (https://melpa.org/)
 
-Otherwise put this file into load-path'ed directory.
+Otherwise, put this file into load-path'ed directory.
 And put the following expression into your ~/.emacs.
 You may need some extra packages.
 
@@ -22,13 +22,6 @@ You can complete `-` (hyphen) option at point.
 Try to type C-i after insert `-`.
 
 ## Configuration
-
-* To suppress popup window initially.
-  Type `C-c C-v` to show the shelldoc window again.
-
-```
-(setq shelldoc-initial-suppress-popup t)
-```
 
 * To show original man page initially. (probably english)
 
