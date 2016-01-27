@@ -33,7 +33,7 @@ install:
         sudo apt-get -qq install emacs-snapshot &&
         sudo apt-get -qq install emacs-snapshot-el;
     fi
-  - "$EMACS" -q --debug-init -batch -f package-initialize -eval "(setq package-user-dir \".\")"  -eval "(package-install 's)";
+#  - "$EMACS" -q --debug-init -batch -f package-initialize -eval "(setq package-user-dir \".\")"  -eval "(package-install 's)";
 
 script:
   - uname -a
