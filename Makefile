@@ -8,4 +8,5 @@ check: compile
 		-f ert-run-tests-batch-and-exit
 
 compile:
+	$(EMACS) --version
 	$(EMACS) -q -batch -L $(ELPA_DIR)/s-20*/ -f batch-byte-compile shelldoc.el
