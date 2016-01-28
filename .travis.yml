@@ -27,7 +27,7 @@ install:
         sudo apt-get -qq install emacs-snapshot &&
         sudo apt-get -qq install emacs-snapshot-el;
     fi
-  - $EMACS -q -batch -l "package" -eval "(setq package-user-dir \".\")" -eval "(add-to-list 'package-archives '(\"melpa\" . \"http://melpa.org/packages/\") t)" -f "package-initialize" -eval "(message \"3:%s\" (list package--initialized package-alist package-alist package-archive-contents))" -eval "(package-install 's)";
+  - $EMACS -q -batch -l "package" -eval "(setq package-user-dir \".\")" -eval "(add-to-list 'package-archives '(\"melpa\" . \"http://melpa.org/packages/\") t)" -f "package-refresh-contents" -f "package-initialize"  -eval "(package-install 's)";
 
 script:
   - uname -a
