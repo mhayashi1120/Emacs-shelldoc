@@ -152,17 +152,14 @@ If you need to read default, set to nil."
     ;; 1. Executable programs or shell commands
     ;; 8. System administration commands (usually only for root)
     (setq args (append
-                (list (format "--sections=%s"
-                              (or shelldoc--man-section
-                                  "1,8")))
+                (list "-S" (or shelldoc--man-section "1:8")))
                 args))
     (setq args (append args (list name)))
     (shelldoc--call-man-to-string args)))
 
 (defun shelldoc--manpage-exists-p (name)
   (let* ((args (list
-                (format "--sections=%s"
-                        (or shelldoc--man-section "1,8"))
+                (list "-S" (or shelldoc--man-section "1:8")))
                 "--where" name))
          (out (shelldoc--call-man-to-string args)))
     (and out (s-trim out))))
