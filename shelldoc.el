@@ -798,7 +798,9 @@ Toggle between default locale and todo"
 
 (define-minor-mode shelldoc-minor-mode
   ""
-  nil nil shelldoc-minor-mode-map
+  :init-value nil
+  :lighter nil
+  :keymap shelldoc-minor-mode-map
   (cond
    (shelldoc-minor-mode
     (add-hook 'kill-buffer-hook 'shelldoc--cleanup-when-kill-buffer)
