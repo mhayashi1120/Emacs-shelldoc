@@ -139,7 +139,8 @@ If you need to read default, set to nil."
              'call-process
              manual-program
              nil t nil
-             args) 0)
+             args)
+            0)
      (buffer-string))))
 
 (defun shelldoc--read-manpage (name)
@@ -153,14 +154,14 @@ If you need to read default, set to nil."
     ;; 8. System administration commands (usually only for root)
     (setq args (append
                 (list "-S" (or shelldoc--man-section "1:8")))
-                args))
+                args)
     (setq args (append args (list name)))
     (shelldoc--call-man-to-string args)))
 
 (defun shelldoc--manpage-exists-p (name)
-  (let* ((args (list
-                (list "-S" (or shelldoc--man-section "1:8")))
-                "--where" name))
+  (let* ((args (append
+                (list "-S" (or shelldoc--man-section "1:8"))
+                (list "--where" name)))
          (out (shelldoc--call-man-to-string args)))
     (and out (s-trim out))))
 
