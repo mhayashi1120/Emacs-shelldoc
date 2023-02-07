@@ -153,8 +153,8 @@ If you need to read default, set to nil."
     ;; 1. Executable programs or shell commands
     ;; 8. System administration commands (usually only for root)
     (setq args (append
-                (list "-S" (or shelldoc--man-section "1:8")))
-                args)
+                args
+                (list "-S" (or shelldoc--man-section "1:8"))))
     (setq args (append args (list name)))
     (shelldoc--call-man-to-string args)))
 
