@@ -136,7 +136,7 @@ If you need to read default, set to nil."
 (defun shelldoc--call-man-to-string (args)
   (shelldoc--man-environ
    (when (= (apply
-             'call-process
+             #'call-process
              manual-program
              nil t nil
              args)
@@ -408,7 +408,7 @@ See the `shelldoc--git-commands-filter' as sample."
 
 (defun shelldoc--windows-bigger-order ()
   (mapcar
-   'car
+   #'car
    (sort
     (mapcar
      (lambda (w)
@@ -608,7 +608,7 @@ See the `shelldoc--git-commands-filter' as sample."
 (defconst shelldoc--man-option-re
   (eval-when-compile
     (mapconcat
-     'identity
+     #'identity
      '(
        ;; general option segment start
        "^\\(?:[\s\t]*\\(-[^\s\t\n,]+\\)\\)"
@@ -694,12 +694,12 @@ Toggle between default locale and todo"
 (defun shelldoc-isearch-forward-document ()
   "Incremental search text in document buffer."
   (interactive)
-  (shelldoc--invoke-function 'isearch-forward))
+  (shelldoc--invoke-function #'isearch-forward))
 
 (defun shelldoc-isearch-backward-document ()
   "Incremental search text in document buffer."
   (interactive)
-  (shelldoc--invoke-function 'isearch-backward))
+  (shelldoc--invoke-function #'isearch-backward))
 
 (defun shelldoc-toggle-doc-window ()
   "Toggle shelldoc popup window is show/hide."
@@ -798,7 +798,7 @@ Toggle between default locale and todo"
     (setq shelldoc-minor-mode-map map)))
 
 (define-minor-mode shelldoc-minor-mode
-  ""
+  "Activate shelldoc popup in current buffer."
   :init-value nil
   :lighter nil
   :keymap shelldoc-minor-mode-map
