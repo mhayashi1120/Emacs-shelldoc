@@ -1,9 +1,9 @@
-;;; shelldoc.el --- shell command editing support with man page.
+;;; shelldoc.el --- shell command editing support with man page. -*- lexical-binding: t -*-
 
 ;; Author: Masahiro Hayashi <mhayashi1120@gmail.com>
 ;; Keywords: applications
 ;; URL: http://github.com/mhayashi1120/Emacs-shelldoc
-;; Version: 0.1.3
+;; Version: 0.2.0
 ;; Package-Requires: ((cl-lib "0.3") (s "1.9.0"))
 
 ;; This program is free software; you can redistribute it and/or
@@ -538,7 +538,7 @@ See the `shelldoc--git-commands-filter' as sample."
 
 ;; to prepare man buffer to complete options.
 (defun shelldoc--prepare-popup-buffer ()
-  (cl-destructuring-bind (cmd-before cmd-after)
+  (cl-destructuring-bind (cmd-before _cmd-after)
       (shelldoc--parse-current-command-line)
     (let ((cmd (shelldoc--guess-manpage-name cmd-before)))
       (when cmd
@@ -552,7 +552,7 @@ See the `shelldoc--git-commands-filter' as sample."
 
 ;; prepare man buffer and popup window.
 (defun shelldoc--print-command-info ()
-  (cl-destructuring-bind (cmd-before cmd-after)
+  (cl-destructuring-bind (cmd-before _cmd-after)
       (shelldoc--parse-current-command-line)
     (let ((cmd (shelldoc--guess-manpage-name cmd-before))
           (clear (lambda ()
@@ -576,12 +576,11 @@ See the `shelldoc--git-commands-filter' as sample."
                   words)
               (cond
                ((eq strategy 'common-unix)
-                (cl-destructuring-bind (cmd-before2 cmd-after2)
+                (cl-destructuring-bind (cmd-before2 _cmd-after2)
                     ;; fallback command-line parsing after detect
                     ;; option parsing rule.
                     (shelldoc--parse-current-command-line t)
-                  (setq cmd-before cmd-before2)
-                  (setq cmd-after cmd-after2))
+                  (setq cmd-before cmd-before2))
                 (setq words (shelldoc--split-compound-option cmd-before)))
                (t
                 (setq words cmd-before)))
